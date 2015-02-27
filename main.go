@@ -3,18 +3,18 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 )
 
 type Post struct {
-	PostedDate mysql.NullTime `json:post_date`
-	Title      string         `json:post_title`
-	Excerpt    string         `json:post_excerpt`
-	Content    string         `json:post_content`
+	PostedDate time.Time `json:post_date`
+	Title      string    `json:post_title`
+	Excerpt    string    `json:post_excerpt`
+	Content    string    `json:post_content`
 }
 
 func main() {
@@ -43,10 +43,16 @@ func main() {
 	defer rows.Close()
 	post := Post{}
 	posts := []Post{}
+	var nullTime mysql.NullTime
 	for rows.Next() {
-		err := rows.Scan(&post.PostedDate, &post.Title, &post.Excerpt, &post.Content)
+		err := rows.Scan(&nullTime, &post.Title, &post.Excerpt, &post.Content)
 		if err != nil {
 			log.Fatal(err)
+		}
+		if nullTime.Valid {
+			post.PostedDate = nullTime.Time
+		} else {
+			post.PostedDate = time.Now()
 		}
 		posts = append(posts, post)
 	}

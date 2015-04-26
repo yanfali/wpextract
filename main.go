@@ -24,8 +24,10 @@ type postContent struct {
 }
 
 type Item struct {
-	Title          string      `xml:title`
-	PubDate        time.Time   `xml:pubDate`
+	Title          string      `xml:"title"`
+	PubDate        time.Time   `xml:"pubDate"`
+	PostDate       time.Time   `xml:"wp:post_date"`
+	PostDateGMT    time.Time   `xml:"wp:post_date_gmt"`
 	Creator        postAuthor  `xml:"dc:creator"`
 	ContentEncoded postContent `xml:"content:encoded"`
 }
@@ -44,6 +46,8 @@ type DbRow struct {
 	Title       string
 	PostAuthor  string
 	PubDate     time.Time
+	PostDate    time.Time
+	PostDateGMT time.Time
 	PostContent string
 }
 
@@ -58,7 +62,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	stmtOut, err := db.Prepare("SELECT post_date_gmt, post_title, (select users.user_login from wp_gpgpja_users as users where posts.post_author = users.id), post_content from wp_gpgpja_posts as posts")
+	stmtOut, err := db.Prepare("SELECT post_date_gmt, post_date, post_title," +
+		"(select users.user_login from wp_gpgpja_users as users where posts.post_author = users.id)," +
+		"post_content from wp_gpgpja_posts as posts")
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -78,7 +84,8 @@ func main() {
 		Generator:   "https://github.com/yanfali/wpextract",
 		Link:        "http://www.faultyvision.net",
 	}
-	var nullTime mysql.NullTime
+	var postTimeGMT mysql.NullTime
+	var postTime mysql.NullTime
 	var content = postContent{
 		Header:  "<![CDATA[",
 		Trailer: "]]",
@@ -88,14 +95,21 @@ func main() {
 		Trailer: "]]",
 	}
 	for rows.Next() {
-		err := rows.Scan(&nullTime, &dbRow.Title, &dbRow.PostAuthor, &dbRow.PostContent)
+		err := rows.Scan(&postTimeGMT, &postTime, &dbRow.Title, &dbRow.PostAuthor, &dbRow.PostContent)
 		if err != nil {
 			log.Fatal(err)
 		}
-		if nullTime.Valid {
-			dbRow.PubDate = nullTime.Time
+		if postTimeGMT.Valid {
+			dbRow.PostDateGMT = postTimeGMT.Time
+		} else {
+			dbRow.PostDateGMT = time.Now()
+		}
+		if postTime.Valid {
+			dbRow.PubDate = postTime.Time
+			dbRow.PostDate = postTime.Time
 		} else {
 			dbRow.PubDate = time.Now()
+			dbRow.PostDate = time.Now()
 		}
 		content.Cdata = dbRow.PostContent
 		author.Cdata = dbRow.PostAuthor

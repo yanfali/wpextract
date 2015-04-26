@@ -6,33 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"time"
 
-	"github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-type postAuthor struct {
-	Header  string `xml:",innerxml"`
-	Cdata   string `xml:",innerxml"`
-	Trailer string `xml:",innerxml"`
-}
-
-type postContent struct {
-	Header  string `xml:",innerxml"`
-	Cdata   string `xml:",innerxml"`
-	Trailer string `xml:",innerxml"`
-}
-
-type Item struct {
-	Title          string      `xml:"title"`
-	PubDate        time.Time   `xml:"pubDate"`
-	PostDate       time.Time   `xml:"wp:post_date"`
-	PostDateGMT    time.Time   `xml:"wp:post_date_gmt"`
-	Creator        postAuthor  `xml:"dc:creator"`
-	ContentEncoded postContent `xml:"content:encoded"`
-}
-
-type channel struct {
+type Channel struct {
 	Title        string `xml:"title"`
 	Link         string `xml:"link"`
 	Description  string `xml:"description"`
@@ -42,13 +20,18 @@ type channel struct {
 	Items        []Item `xml:"item"`
 }
 
-type DbRow struct {
-	Title       string
-	PostAuthor  string
-	PubDate     time.Time
-	PostDate    time.Time
-	PostDateGMT time.Time
-	PostContent string
+type rss struct {
+	Version string   `xml:"version,attr"`
+	Content string   `xml:"xmlns:content,attr"`
+	Wfw     string   `xml:"xmlns:wfw,attr"`
+	Dc      string   `xml:"xmlns:dc,attr"`
+	Wp      string   `xml:"xmlns:wp,attr"`
+	Channel *Channel `xml:"channel"`
+}
+
+type PostMetaDBRow struct {
+	MetaKey   string `xml:"meta_key"`
+	MetaValue string `xml:'meta_value"`
 }
 
 func main() {
@@ -62,66 +45,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	stmtOut, err := db.Prepare("SELECT post_date_gmt, post_date, post_title," +
-		"(select users.user_login from wp_gpgpja_users as users where posts.post_author = users.id)," +
-		"post_content from wp_gpgpja_posts as posts")
+
+	channel, err := getPosts(db)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
-	defer stmtOut.Close()
-
-	rows, err := stmtOut.Query()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	defer rows.Close()
-	dbRow := DbRow{}
-	channel := channel{
-		Title:       "Faultyvision",
-		Description: "Yuhri's Blog",
-		Language:    "en",
-		Generator:   "https://github.com/yanfali/wpextract",
-		Link:        "http://www.faultyvision.net",
-	}
-	var postTimeGMT mysql.NullTime
-	var postTime mysql.NullTime
-	var content = postContent{
-		Header:  "<![CDATA[",
-		Trailer: "]]",
-	}
-	var author = postAuthor{
-		Header:  "<![CDATA[",
-		Trailer: "]]",
-	}
-	for rows.Next() {
-		err := rows.Scan(&postTimeGMT, &postTime, &dbRow.Title, &dbRow.PostAuthor, &dbRow.PostContent)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if postTimeGMT.Valid {
-			dbRow.PostDateGMT = postTimeGMT.Time
-		} else {
-			dbRow.PostDateGMT = time.Now()
-		}
-		if postTime.Valid {
-			dbRow.PubDate = postTime.Time
-			dbRow.PostDate = postTime.Time
-		} else {
-			dbRow.PubDate = time.Now()
-			dbRow.PostDate = time.Now()
-		}
-		content.Cdata = dbRow.PostContent
-		author.Cdata = dbRow.PostAuthor
-		channel.Items = append(channel.Items, Item{
-			Title:          dbRow.Title,
-			PubDate:        dbRow.PubDate,
-			ContentEncoded: content,
-			Creator:        author,
-		})
+	rss := rss{
+		Version: "2.0",
+		Channel: &channel,
+		Content: "http://purl.org/rss/1.0/modules/content/",
+		Wfw:     "http://wellformedweb.org/CommentAPI/",
+		Dc:      "http://purl.org/elements/1.1/",
+		Wp:      "http://wordpress.org/export/1.0/",
 	}
 	log.Printf("Found %d posts\n", len(channel.Items))
-	enc, err := xml.MarshalIndent(channel, "  ", "    ")
+	enc, err := xml.MarshalIndent(rss, "  ", "    ")
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 	}

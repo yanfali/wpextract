@@ -11,13 +11,14 @@ import (
 )
 
 type Channel struct {
-	Title        string `xml:"title"`
-	Link         string `xml:"link"`
-	Description  string `xml:"description"`
-	Generator    string `xml:"generator"`
-	Language     string `xml:"language"`
-	WpWxrVersion string `xml:"wp:wxr_version"`
-	Items        []Item `xml:"item"`
+	Title        string     `xml:"title"`
+	Link         string     `xml:"link"`
+	Description  string     `xml:"description"`
+	Generator    string     `xml:"generator"`
+	Language     string     `xml:"language"`
+	WpWxrVersion string     `xml:"wp:wxr_version"`
+	Items        []Item     `xml:"item"`
+	PostMetas    []PostMeta `xml:"wp:postmeta"`
 }
 
 type rss struct {
@@ -27,11 +28,6 @@ type rss struct {
 	Dc      string   `xml:"xmlns:dc,attr"`
 	Wp      string   `xml:"xmlns:wp,attr"`
 	Channel *Channel `xml:"channel"`
-}
-
-type PostMetaDBRow struct {
-	MetaKey   string `xml:"meta_key"`
-	MetaValue string `xml:'meta_value"`
 }
 
 func main() {
@@ -46,20 +42,27 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 
-	channel, err := getPosts(db)
+	limit := 2
+
+	channel, err := getPosts(db, limit)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
+	postMetas, err := getPostMetas(db, limit)
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	channel.PostMetas = postMetas
 	rss := rss{
 		Version: "2.0",
-		Channel: &channel,
+		Channel: channel,
 		Content: "http://purl.org/rss/1.0/modules/content/",
 		Wfw:     "http://wellformedweb.org/CommentAPI/",
 		Dc:      "http://purl.org/elements/1.1/",
 		Wp:      "http://wordpress.org/export/1.0/",
 	}
 	log.Printf("Found %d posts\n", len(channel.Items))
-	enc, err := xml.MarshalIndent(rss, "  ", "    ")
+	enc, err := xml.MarshalIndent(rss, " ", "  ")
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"time"
 
@@ -63,7 +64,11 @@ type PostDbRow struct {
 	Guid          Guid
 }
 
-func getPosts(db *sql.DB) (channel Channel, err error) {
+func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
+	limitStmt := ""
+	if limit > 0 {
+		limitStmt = fmt.Sprintf(" limit %d", limit)
+	}
 	stmtOut, err := db.Prepare("SELECT " +
 		"post_date_gmt," +
 		"post_date," +
@@ -80,7 +85,7 @@ func getPosts(db *sql.DB) (channel Channel, err error) {
 		"post_type," +
 		"post_password," +
 		"guid" +
-		" from wp_gpgpja_posts as posts")
+		" from wp_gpgpja_posts as posts " + limitStmt)
 	if err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -88,12 +93,12 @@ func getPosts(db *sql.DB) (channel Channel, err error) {
 
 	rows, err := stmtOut.Query()
 	if err != nil {
-		return Channel{}, err
+		return &Channel{}, err
 	}
 
 	defer rows.Close()
 	dbRow := PostDbRow{}
-	channel = Channel{
+	channel = &Channel{
 		Title:       "Faultyvision",
 		Description: "Yuhri's Blog",
 		Language:    "en",
@@ -129,7 +134,7 @@ func getPosts(db *sql.DB) (channel Channel, err error) {
 			&dbRow.Guid.Content,
 		)
 		if err != nil {
-			return Channel{}, err
+			return &Channel{}, err
 		}
 		if postTimeGMT.Valid {
 			dbRow.PostDateGMT = postTimeGMT.Time

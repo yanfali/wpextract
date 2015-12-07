@@ -21,12 +21,19 @@ type postContent struct {
 	Trailer string `xml:",innerxml"`
 }
 
+type postExcerpt struct {
+	Header  string `xml:",innerxml"`
+	Cdata   string `xml:",innerxml"`
+	Trailer string `xml:",innerxml"`
+}
+
 type Item struct {
 	Title          string      `xml:"title"`
 	PubDate        time.Time   `xml:"pubDate"`
 	Creator        postAuthor  `xml:"dc:creator"`
 	Guid           Guid        `xml:"guid"`
 	ContentEncoded postContent `xml:"content:encoded"`
+	ExcerptEncoded postExcerpt `xml:"excerpt:encoded"`
 	PostId         int         `xml:"wp:post_id"`
 	PostDate       time.Time   `xml:"wp:post_date"`
 	PostDateGMT    time.Time   `xml:"wp:post_date_gmt"`
@@ -62,6 +69,7 @@ type PostDbRow struct {
 	PostType      string
 	PostPassword  string
 	Guid          Guid
+	PostExcerpt   string
 }
 
 func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
@@ -84,7 +92,8 @@ func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
 		"ping_status," +
 		"post_type," +
 		"post_password," +
-		"guid" +
+		"guid, " +
+		"post_excerpt" +
 		" from wp_gpgpja_posts as posts " + limitStmt)
 	if err != nil {
 		log.Fatalf("%v", err)
@@ -111,6 +120,10 @@ func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
 		Header:  "<![CDATA[",
 		Trailer: "]]",
 	}
+	var excerpt = postExcerpt{
+		Header:  "<![CDATA[",
+		Trailer: "]]",
+	}
 	var author = postAuthor{
 		Header:  "<![CDATA[",
 		Trailer: "]]",
@@ -132,6 +145,7 @@ func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
 			&dbRow.PostType,
 			&dbRow.PostPassword,
 			&dbRow.Guid.Content,
+			&dbRow.PostExcerpt,
 		)
 		if err != nil {
 			return &Channel{}, err
@@ -149,11 +163,13 @@ func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
 			dbRow.PostDate = time.Now()
 		}
 		content.Cdata = dbRow.PostContent
+		excerpt.Cdata = dbRow.PostExcerpt
 		author.Cdata = dbRow.PostAuthor
-		channel.Items = append(channel.Items, Item{
+		item := Item{
 			Title:          dbRow.Title,
 			PubDate:        dbRow.PubDate,
 			ContentEncoded: content,
+			ExcerptEncoded: excerpt,
 			Creator:        author,
 			PostId:         dbRow.PostId,
 			PostParentId:   dbRow.PostParentId,
@@ -164,7 +180,12 @@ func getPosts(db *sql.DB, limit int) (channel *Channel, err error) {
 			PingStatus:     dbRow.PingStatus,
 			PostType:       dbRow.PostType,
 			PostPassword:   dbRow.PostPassword,
-		})
+		}
+		item.Guid = Guid{
+			Permalink: false,
+			Content:   dbRow.Guid.Content,
+		}
+		channel.Items = append(channel.Items, item)
 	}
 	return channel, nil
 }

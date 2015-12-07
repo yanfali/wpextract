@@ -53,6 +53,7 @@ func main() {
 		log.Fatalf("%v", err)
 	}
 	channel.PostMetas = postMetas
+	channel.WpWxrVersion = "1.2"
 	rss := rss{
 		Version: "2.0",
 		Channel: channel,
